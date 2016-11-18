@@ -4,3 +4,5 @@ A lightweight library to send messages via PHP to Slack. Simple and easy to use.
 Read the example.php script for examples on how to use the features of the SlackWebhook class and how you can implemented it in your own projects.
 
 Feel free to modify, add and change as you wish. I will be happy to accept any merges that add/fixes any issues.
+
+_Note: Created in Eclipse PHP (Neon)_
