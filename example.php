@@ -1,6 +1,5 @@
 <?php
 
-
 // ===== Include the library
 include_once('webhook.php');
 
@@ -29,7 +28,7 @@ $webhook->setIgnoreSSL(true);
 
 // ====== Send a message =======
 $success = $webhook->send("Hello World!");
-echo "Hello World: {$success[0]}<br>";
+echo "Hello World: {$success[0]} || {$success[1]}<br>";
 echo "<img src='http://take.ms/rLTbi' /><br><br>";
 
 // ====== Send a message with a title ======
@@ -56,8 +55,19 @@ $success = $webhook->send("Here is a link: {$link}");
 echo "Named Links: {$success[0]}<br>";
 echo "<img src='http://take.ms/ViUx1' /><br><br>";
 
+// ====== Async Messages  ======
+//*Use these at your own risk. They work well but take up extra resources when sending. 
+// Don't let your users directly send these as they will be able to flood due to the instant timeout.
+$start_time = time();
+$success = $webhook->sendAsync("Hellow World!", "Async", "#-lobby-");
+echo "Async: {$success[0]} @ " . (time() - $start_time) . "s<br>";
+
 // ======= Attachments =======
+//Using this as comparisons
+$start_time = time();
+
 //First we need to prepare an attachment
+//See https://api.slack.com/docs/message-attachments for more details about each element.
 $attachment = new SlackAttachment("Text that appears within the attachment", "plain-text summary of the attachment");
 $attachment->setColor("#36a64f");
 $attachment->setPretext("Text that appears above the attachment");
@@ -66,9 +76,10 @@ $attachment->setTitle("Slack API Documentation", "https://api.slack.com/docs/mes
 $attachment->addField("Proprity", "High", true);
 $attachment->addField("Urgency", "Low", true);
 $attachment->setImage("https://imgs.xkcd.com/comics/exploits_of_a_mom.png");
+$attachment->setThumbnail("https://example.com/icon.png");
 $attachment->setFooter("Slack API", "https://platform.slack-edge.com/img/default_application_icon.png");
 
 //Now send it off
 $success = $webhook->send("This is s atest attachment", "", "", array($attachment));
-echo "Attachments: {$success[0]}<br>";
+echo "Attachments: {$success[0]} @ " . (time() - $start_time) . "s<br>";
 echo "<img src='http://take.ms/bQfUT'/><br>";

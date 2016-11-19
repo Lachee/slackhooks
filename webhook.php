@@ -1,5 +1,4 @@
 <?php
-
 /**
  * webhook.php
  *
@@ -19,8 +18,18 @@ class SlackWebhook {
 	private $ignore_ssl = false;
 	private $default_channel;
 	private $use_markdown = true;
+	
+	private $async_handler = "";
+	
+	/**
+	 * Should we allow async calls? This could be a security propblem or mess if scripts if you enable this.
+	 * @var boolean
+	 */
+	static $ALLOW_ASYNC = true;
+	
 	var $botname;
 	var $boticon;
+	
 	function __construct($webhook_url, $botname, $boticon, $default_channel = "#-lobby-") {
 		$this->webhook = $webhook_url;
 		$this->botname = $botname;
@@ -75,6 +84,23 @@ class SlackWebhook {
 	}
 	
 	/**
+	 * Sets the current Async Handler. A POST call will be made to this address and have a very fast timeout. This address will pretend to have failed and will carry on.
+	 * Used in conjunction with SlackWebhooks::handle_async();
+	 * @param unknown $handler
+	 */
+	function setAsyncHandler($handler) {
+		$this->async_handler = $handler;
+	}
+	
+	/**
+	 * Fetches the URL of the async handler. Defaults to this very file.
+	 * @return string
+	 */
+	private function getAsyncHandler() {
+		return empty($this->async_handler) ? (isset($_SERVER['HTTPS']) && $_SERVER["HTTPS"] == "on" ? "https" : "http") . "://{$_SERVER['HTTP_HOST']}{$_SERVER['REQUEST_URI']}" : $this->async_handler;
+	}
+	
+	/**
 	 * Sends a message to slack via a channel.
 	 * Returns true on success.
 	 *  	
@@ -93,9 +119,18 @@ class SlackWebhook {
 			
 		// prepare the payload
 		$payload = $this->_preparePayload($title, $channel, $message,  $attachments);
-		return $this->_sendPayload($payload);
-	}
+		return $this->sendPayload($payload, false);
+	}	
+	function sendAsync($message, $title = "", $channel = "", $attachments = array()) {
 	
+		// Prepare the channel
+		if (empty($channel))
+			$channel = $this->default_channel;
+				
+			// prepare the payload
+		$payload = $this->_preparePayload($title, $channel, $message,  $attachments);
+		return $this->sendPayload($payload, true);
+	}
 	
 	function createLink($source, $name = "") {
 		// clean the source up
@@ -115,54 +150,91 @@ class SlackWebhook {
 		return "<{$source}|{$name}>";
 	}
 	
-	/**
-	 * Sends the generated json payload
-	 * @param string $payload
-	 * @return array(boolean, message)
-	 */
-	private function _sendPayload($payload) {
 
-		// Prepare the curl channel
+	/**
+	 * Sends the JSON Formated Payload to the Slack webhook.
+	 * @param json_string $payload
+	 * @param boolean $async
+	 * @return array(boolean, string)
+	 */
+	function sendPayload($payload, $async = false) {
+		
+		//Are we using async but async is disabled?
+		if ($async && !SlackWebhook::$ALLOW_ASYNC) 
+			return array(false, "Async is not allowed!");
+		
+		//Prepare the curl channel
 		$ch = curl_init();
 		
-		// Set the address
-		curl_setopt($ch, CURLOPT_URL, $this->webhook);
+		//Set the address
+		$webhook = $async ? $this->getAsyncHandler() : $this->webhook;
 		
-		// Set the fields
+		//Set the url and transfer
+		curl_setopt($ch, CURLOPT_URL, $webhook);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-		curl_setopt($ch, CURLOPT_POSTFIELDS, array(
-				'payload' => $payload
-		));
 		
-		// Should we ignore ssl?
-		if ($this->ignore_ssl)
+		//Set the fields. Async needs special fields set
+		if (!$async) {
+			//Set the standard payload field
+			curl_setopt($ch, CURLOPT_POSTFIELDS, array(
+					'payload' => $payload
+			));
+		}
+		else
+		{
+			//Set the timeout to a low number and set the specific async fields
+			curl_setopt($ch, CURLOPT_TIMEOUT, 1);
+			curl_setopt($ch, CURLOPT_POSTFIELDS, array(
+					'asyncslack_payload' => $payload,
+					'asyncslack_webhook' => $this->webhook,
+					'asyncslack_send' => true,
+					'asyncslack_ignoressl' => $this->ignore_ssl
+			));
+		}
+		
+		//Should we ignore ssl?
+		if ($this->ignore_ssl) {
 			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-				
-			// Send the message off
-			$content = curl_exec($ch);
+		}
 		
-			// Did we fail to get anything back?
-			if (FALSE === $content) {
-				return array(
-						false,
-						curl_error($ch),
-						curl_errno($ch)
-				);
+		//Send the message off
+		$content = curl_exec($ch);
+		
+		//If we are not async, do some debug logging.
+		if (!$async) {
+			//Just some simple logging for debugging purposes.
+			/*
+			$myfile = fopen("log.txt", "a") or die("Unable to open file!");
+			fwrite($myfile, "Payload: " . $payload . "\r\n");
+			fwrite($myfile, "Webhook: " . $webhook . "\r\n");
+			fwrite($myfile, "Results: " . $content . "\r\n");
+			
+			if (FALSE === $content) {				
+				fwrite($myfile, "Error: " .  curl_error($ch) . "\r\n");
 			}
+			
+			fwrite($myfile, "\r\n");
+			fclose($myfile);
+			*/			
+		}
 		
-			// Did we fail to send the message?
-			if ($content != "ok") {
-				return array(
-						false,
-						$content
-				);
-			}
+		// Did we fail to get anything back?
+		if (FALSE === $content) {
+			return array(false, "Error: " . curl_error($ch), curl_errno($ch));
+		}
 		
-			// We where succesfull
-			return array(
-					true,
-					$content
-			);
+		// Are we async? We are exepecting nothing if so.
+		if ($async) {
+			return array(true, "async ok");
+		}
+		
+		// Did we fail to send the message?
+		if ($content != "ok") {
+			return array(false, "Content: {$content}");
+		}
+		
+		// We where succesfull
+		return array(true, $content);
 	}
 	
 	/**
@@ -207,6 +279,39 @@ class SlackWebhook {
 		//Encode the json and send it back
 		$json = json_encode($payload);
 		return $json;
+	}
+	
+	/**
+	 * Handles the async POST calls made it itself. Will only send the payload on if all the expected data is available and will always end execution of the PHP script here.
+	 */
+	static function handle_async() {
+		//End the connection
+		ob_end_clean();
+		ignore_user_abort();
+		ob_start();
+		header("Connection: close");
+		header("Content-Length: " . ob_get_length());
+		ob_end_flush();
+		flush();
+		
+		//Make sure we have all our payload
+		if (isset($_POST['asyncslack_payload']) && isset($_POST['asyncslack_webhook']) && isset($_POST['asyncslack_ignoressl']) && isset($_POST['asyncslack_send'])){
+		
+			//Prepare the data
+			$payload = $_POST['asyncslack_payload'];
+			$webhook = $_POST['asyncslack_webhook'];
+			$ignore_ssl = $_POST['asyncslack_ignoressl'];
+		
+			//Create a new webhook
+			$hook = new SlackWebhook($webhook, "Async Bot", ":ghost:");
+			$hook->setIgnoreSSL($ignore_ssl);
+		
+			//Send the data directly
+			$hook->sendPayload($payload, false);
+		}
+		
+		//End here so we don't execute any scripts by acciedent.
+		exit();
 	}
 }
 
@@ -395,4 +500,12 @@ class SlackAttachment {
 		
 		return $arr;
 	}
+}
+
+//Are we allowed to send asyncs and have we recieved any async POST fields?
+if (SlackWebhook::$ALLOW_ASYNC && (isset($_POST['asyncslack_payload']) || isset($_POST['asyncslack_webhook']) || isset($_POST['asyncslack_ignoressl']) || isset($_POST['asyncslack_send']))){
+	
+	//Tell the slackhook to handle the async call. This will end this script, but to be sure we are exiting again.
+	SlackWebhook::handle_async();
+	exit();
 }
