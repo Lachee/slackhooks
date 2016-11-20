@@ -19,7 +19,7 @@ It is incredibly easy to use this library!
 3. Profit?
 
 To be fair, there are some other minor steps to get it working. For example, you must grab your Incoming Webhook URL from slack. It should look like this:
-```https://hooks.slack.com/services/XXXXXXXXX/YYYYYYYYY/ZZZZZZZZZZZZZZZZZZZZZZZZ```
+``` https://hooks.slack.com/services/XXXXXXXXX/YYYYYYYYY/ZZZZZZZZZZZZZZZZZZZZZZZZ ```
 
 Once you have your hook, you are ready to go! Follow the tutorials below to find more details!
 
