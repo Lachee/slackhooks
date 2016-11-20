@@ -7,6 +7,16 @@ Example of attachments: http://take.ms/bQfUT
 
 Feel free to modify, add and change as you wish. I will be happy to accept any merges that add/fixes any issues.
 
+### Sister Libraries
+Be sure to check out the sister libraries that are in various different lanaguages!
+
+Name			| Lang| Link
+------------------------|-----|--------------------------------------------
+Slackhooks 		| PHP | https://github.com/Lachee/slackhooks
+Slackhooks CSharp 	| C#  | https://github.com/Lachee/slackhooks-csharp
+
+
+
 ## Setup ##
 It is incredibly easy to use this library! 
 1. Download or copy the contents of webhook.php to a file of your choosing.
